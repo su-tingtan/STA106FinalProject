@@ -1,0 +1,1070 @@
+---
+title: "STA Final Project - COVID-19 Data Set"
+author: "Oliver Yau, Su-Ting Tan, Koby Lieu, and Sihua Cai"
+output: html_document
+---
+
+# Setup
+
+To begin the analysis of this data, we begin by importing the data and assigning the factors and response variables.
+
+```{r}
+
+COVID19 = read.table("COVID19.txt", header = T, sep = '\t')
+
+# factors
+
+sex = COVID19$Sex
+age = COVID19$AgeGroup
+
+# response variables 
+
+covid = as.numeric(COVID19$COVIDProp)
+flu = (as.numeric(COVID19$InfluenzaProp))
+pneumonia = as.numeric(COVID19$PneumoniaProp)
+```
+
+With two factors in this data set, we have decided that the two-way ANOVA model is appropriate.
+
+# Plotting the Data & Initial Impressions
+
+We are now going to plot the data on a dot plot, with the x-axis defined as the sex of the group (male or female) and the y-axis defined as the proportion of deaths from COVID-19. For the purposes of this analysis we acknowledge that the raw number of total deaths in a state plays a role in proper weighting of the proportions, but we will be excluding the total deaths for the time being.
+
+```{r}
+
+# Sorting the Data by Sex to Graph it
+level = 1*c(sex =='Male')+2*c(sex=='Female')
+
+Male = rep(0, 364)
+Female = rep(0, 364)
+
+for(i in 0:51){
+  for(j in 1:7){
+    Male[7*i + j] = covid[14*i + j]
+    Female[7*i+j] = covid[14*i+7+j]
+  }
+}
+
+newsex = rep(0, 728)
+newsex[1:364] = Male
+newsex[365:728] = Female
+
+# Plotting the data
+
+plot(level, newsex, xaxt='n', main = '', pch=19, xlab = 'Sex', ylab = 'COVID Proportion')
+axis(side = 1, at = c(1,2), labels = c('Male', 'Female'))
+```
+
+We add a jitter to have a better idea of the frequency.
+
+```{r}
+level.jitter = level + rnorm(length(newsex), 0, sd=0.04)
+plot(level.jitter,covid,xaxt = 'n',main = 'jitter aligned dot plot', xlab = 'Sex', ylab = 'COVID Proportion')
+axis(side = 1, at = c(1,2), labels = c('Male', 'Female'))
+```
+
+Immediately, one can observe that males have more high death rates than females do, but we cannot conclude with certainty that there are differences currently. There is possibly an effect of sex on death rate from COVID-19.
+
+Seeing as there are two factors, we also will now plot the data by age group, with the seven groups of age group on the x-axis and the proportion of deaths from COVID-19 on the y-axis.
+
+```{r}
+level_age = 1*c(age=='0-17 years') + 2*c(age=='18-29 years') + 3*c(age=='30-49 years') + 4*c(age=='50-64 years') + 5*c(age=='65-74 years') + 6*c(age=='75-84 years') + 7*c(age=='85 years and over')
+
+age_1 = rep(0,104)
+age_2 = rep(0,104)
+age_3 = rep(0,104)
+age_4 = rep(0,104)
+age_5 = rep(0,104)
+age_6 = rep(0,104)
+age_7 = rep(0,104)
+
+for(i in 0:103){
+  age_1[i] = covid[7*i+1]
+  age_2[i] = covid[7*i+2]
+  age_3[i] = covid[7*i+3]
+  age_4[i] = covid[7*i+4]
+  age_5[i] = covid[7*i+5]
+  age_6[i] = covid[7*i+6]
+  age_7[i] = covid[7*i+7]
+}
+
+new_age = rep(0, 728)
+new_age[1:104] = age_1
+new_age[105:208] = age_2
+new_age[209:312] = age_3
+new_age[313:416] = age_4
+new_age[417:520] = age_5
+new_age[521:624] = age_6
+new_age[625:728] = age_7
+
+agenames = c('0-17', '18-29', '30-49', '50-64', '65-74', '75-84', '85+')
+
+plot(level_age, covid, xaxt='n', main = 'aligned dot plot', pch=19, xlab = 'Age Ranges', ylab = 'Covid Proportion')
+axis(side = 1, at = c(1:7), labels = agenames)
+```
+
+We once again add a jitter to get a better idea of the frequency of death rates:
+
+```{r}
+level_age.jitter = level_age + rnorm(length(new_age), 0, sd=0.04)
+plot(level_age.jitter,covid,xaxt = 'n',main = 'jitter aligned dot plot', xlab = 'Age Ranges', ylab = 'Covid Proportion')
+axis(side = 1, at = c(1:7), labels = agenames)
+```
+
+From these plots we observe that younger people appear to die at a lesser rate than older people. There is possibly an effect of age on COVID-19.
+
+# Parameter Estimation
+
+Now that we've graphed the data to get an idea of what it looks like, we begin to calculate the important values of the data set: the means across all states for each combination of age group and sex for each of COVID-19, pneumonia, and influenza. 
+
+```{r}
+# Parameter Estimation
+a = 2
+b = 7 
+n = 52
+
+mu_covid = mean(covid)
+mu_pneumonia = mean(pneumonia)
+mu_influenza = mean(flu)
+
+
+COVIDyij.bar = matrix(0, a, b)
+Pneuyij.bar = matrix(0, a, b)
+Fluyij.bar = matrix(0, a, b)
+SexLabels = c("Male", "Female")
+AgeLabels = c("0-17 years", "18-29 years", "30-49 years", "50-64 years", "65-74 years", "75-84 years", "85 years and over")
+```
+
+We use matrices to store the values of these parameter estimations. Three 2 x 7 matrices will account for the 2 levels of the sex variable and the 7 levels of the age group variable.
+
+```{r}
+
+for(i in 1:a){
+  for(j in 1:b){
+    COVIDyij.bar[i,j] = mean(covid[sex == SexLabels[i] & age == AgeLabels[j]])
+  }
+}
+
+for(i in 1:a){
+  for(j in 1:b){
+    Fluyij.bar[i,j] = mean(flu[sex == SexLabels[i] & age == AgeLabels[j]])
+  }
+}
+
+for(i in 1:a){
+  for(j in 1:b){
+    Pneuyij.bar[i,j] = mean(pneumonia[sex == SexLabels[i] & age == AgeLabels[j]])
+  }
+}
+```
+
+We will now calculate the alpha, beta, and gamma values for each of COVID-19, pneumonia, and influenza. Each respective disease will have a vector length 2 to store its alpha values and a vector length 2 to store its beta values. Each respective disease will also have its own 2 x 7 matrix to store its gamma values.
+
+```{r}
+#alpha
+COVIDuA = apply(COVIDyij.bar, 1, mean)
+COVIDalpha = COVIDuA - mu_covid
+
+FluuA = apply(Fluyij.bar, 1, mean)
+Flualpha = FluuA - mu_influenza
+
+PneuuA = apply(Pneuyij.bar, 1, mean)
+Pneualpha = PneuuA - mu_pneumonia
+
+
+
+#beta
+COVIDuB = apply(COVIDyij.bar, 2, mean)
+COVIDbeta = COVIDuB - mu_covid
+
+FluuB = apply(Fluyij.bar, 2, mean)
+Flubeta = FluuB - mu_influenza
+
+PneuuB = apply(Pneuyij.bar, 2, mean)
+Pneubeta = PneuuB - mu_pneumonia
+
+
+
+#gamma
+COVIDgamma = matrix(0, a, b)
+for(i in 1:a){
+  for(j in 1:b){
+    COVIDgamma[i, j] = COVIDyij.bar[i, j] - COVIDuA[i] - COVIDuB[j] + mu_covid
+  }
+}
+
+Flugamma = matrix(0, a, b)
+for(i in 1:a){
+  for(j in 1:b){
+    Flugamma[i, j] = Fluyij.bar[i, j] - FluuA[i] - FluuB[j] + mu_influenza
+  }
+}
+
+Pneugamma = matrix(0, a, b)
+for(i in 1:a){
+  for(j in 1:b){
+    Pneugamma[i, j] = Pneuyij.bar[i, j] - PneuuA[i] - PneuuB[j] + mu_pneumonia
+  }
+}
+```
+
+# Checking the Assumptions of the Two-Way ANOVA Model
+
+As we know, there are assumptions that must be closely followed or otherwise noted when using the two-way ANOVA model. First, we need to check that the equal variance assumption by plotting the residual plots and looking for the variances among the data to be approximately equal. Then we plot the normal Q-Q plot for the residuals of each of the three diseases to check the normality assumption. We are starting first with COVID-19.
+
+```{r}
+# Model Assumptions
+
+COVIDYhat = rep(0,length(time))
+for(i in 1:a)
+{
+  for(j in 1:b)
+  {
+    COVIDYhat[sex == SexLabels[i] & age == AgeLabels[j]] = COVIDyij.bar[i,j]
+  }
+}
+COVIDresidual = covid - COVIDYhat
+
+plot(COVIDYhat, COVIDresidual, xlab = "Factor Level Means", main = "Residual Plot of the Factor Level Means", ylab = "Residuals")
+abline(h=0,col='red')
+```
+
+It does not appear that the raw data follows the equal variance assumption, so we must transform it. After testing, it appeared that the transformation of y = sqrt(sin(x)) was the best transformation.
+
+```{r}
+# Transformation
+
+covid = asin(sqrt(covid))
+
+for(i in 1:a){
+  for(j in 1:b){
+    COVIDyij.bar[i,j] = mean(covid[sex == SexLabels[i] & age == AgeLabels[j]])
+  }
+}
+
+COVIDYhat = rep(0,length(time))
+for(i in 1:a)
+{
+  for(j in 1:b)
+  {
+    COVIDYhat[sex == SexLabels[i] & age == AgeLabels[j]] = COVIDyij.bar[i,j]
+  }
+}
+COVIDresidual = covid - COVIDYhat
+
+plot(COVIDYhat, COVIDresidual, xlab = "Factor Level Means", main = "Residual Plot of the Factor Level Means", ylab = "Residuals")
+abline(h=0,col='red')
+```
+
+The residuals show better results (but still not ideal) as the variances are closer in range to one another.
+
+Now we do the normal q-q plot for the normality assumption of COVID-19 data.
+
+```{r}
+qqnorm(COVIDresidual)
+qqline(COVIDresidual)
+```
+
+We observe quite heavy tails on our normal Q-Q plot. The normality assumption is under question for the COVID-19 responses.
+
+We now plot the residual plot for pneumonia.
+
+```{r}
+PneuYhat = rep(0,length(time))
+for(i in 1:a)
+{
+  for(j in 1:b)
+  {
+    PneuYhat[sex == SexLabels[i] & age == AgeLabels[j]] = Pneuyij.bar[i,j]
+  }
+}
+Pneuresidual = pneumonia - PneuYhat
+
+plot(PneuYhat, Pneuresidual, xlab = "Factor Level Means", main = "Residual Plot of the Factor Level Means", ylab = "Residuals")
+abline(h=0,col='red')
+```
+
+It does not appear that the raw data follows the equal variance assumption, so we must transform it.
+
+```{r}
+# Transformation
+
+pneumonia = asin(sqrt(pneumonia))
+
+for(i in 1:a){
+  for(j in 1:b){
+    Pneuyij.bar[i,j] = mean(pneumonia[sex == SexLabels[i] & age == AgeLabels[j]])
+  }
+}
+
+PneumoniaYhat = rep(0,length(time))
+for(i in 1:a)
+{
+  for(j in 1:b)
+  {
+    PneumoniaYhat[sex == SexLabels[i] & age == AgeLabels[j]] = Pneuyij.bar[i,j]
+  }
+}
+Pneuresidual = pneumonia - PneumoniaYhat
+
+plot(PneumoniaYhat, Pneuresidual, xlab = "Factor Level Means", main = "Residual Plot of the Factor Level Means", ylab = "Residuals")
+abline(h=0,col='red')
+```
+
+After transformation, the variances appear to be more equal than before (but still not ideal).
+
+```{r}
+qqnorm(Pneuresidual)
+qqline(Pneuresidual)
+```
+
+The data does closely follow the qqnorm line for the most part, though with heavy tails. To some extent, the normality assumption for the pneumonia data may be under question.
+
+We now plot the residual plot for influenza.
+
+```{r}
+FluYhat = rep(0,length(time))
+for(i in 1:a)
+{
+  for(j in 1:b)
+  {
+    FluYhat[sex == SexLabels[i] & age == AgeLabels[j]] = Fluyij.bar[i,j]
+  }
+}
+Fluresidual = flu - FluYhat
+
+plot(FluYhat, Fluresidual, xlab = "Factor Level Means", main = "Residual Plot of the Factor Level Means", ylab = "Residuals")
+abline(h=0,col='red')
+```
+
+It does not appear that the raw data follows the equal variance assumption, so we must transform it.
+
+```{r}
+# Transformation
+
+flu = asin(sqrt(flu))
+
+for(i in 1:a){
+  for(j in 1:b){
+    Fluyij.bar[i,j] = mean(flu[sex == SexLabels[i] & age == AgeLabels[j]])
+  }
+}
+
+FluYhat = rep(0,length(time))
+for(i in 1:a)
+{
+  for(j in 1:b)
+  {
+    FluYhat[sex == SexLabels[i] & age == AgeLabels[j]] = Fluyij.bar[i,j]
+  }
+}
+Fluresidual = flu - FluYhat
+
+plot(FluYhat, Fluresidual, xlab = "Factor Level Means", main = "Residual Plot of the Factor Level Means", ylab = "Residuals")
+abline(h=0,col='red')
+```
+
+After transformation, the variances appear to be more equal than before (but still not ideal). We now plot the normal q-q plot for influenza.
+
+```{r}
+qqnorm(Fluresidual)
+qqline(Fluresidual)
+```
+
+There is major concern for the normality assumption with this influenza data set. The data does not follow the qqline very closely at all.
+
+# Interaction of Age and Sex on Death Rates
+
+We will now investigate the interaction of age and sex on the death rates for each particular disease with the interaction plots.
+
+```{r}
+## Interaction Plots
+
+COVIDmean = apply(COVIDyij.bar, 1, mean)
+plot(COVIDyij.bar[,1],xaxt = 'n',main = 'Interaction plot', pch=19, type="l", ylim=c(min(COVIDyij.bar),max(COVIDyij.bar)), xlim = c(1, 2.75), xlab="Factor A: Sex", ylab = "COVID Proportion")
+axis(side = 1,at = c(1, 2),labels = c('Male','Female'))
+points(COVIDyij.bar[,2], type="l", col="blue")
+points(COVIDyij.bar[,3], type="l", col="red")
+points(COVIDyij.bar[,4], type="l", col="green")
+points(COVIDyij.bar[,5], type="l", col="pink")
+points(COVIDyij.bar[,6], type="l", col="purple")
+points(COVIDyij.bar[,7], type="l", col="orange")
+points(COVIDmean, type="l", col="cyan")
+legend("bottomright", legend=c("Factor B: 0-17 years", "Factor B: 18-29 years", "Factor B: 30-49 years", 
+                               "Factor B: 50-64 years", "Factor B: 65-74 years", "Factor B: 75-84 years", 
+                               "Factor B: 85 years and over", "Factor B: Meanline"), 
+       col=c("black","blue", "red", "green", "pink", "purple", "orange", "cyan"), lty=1 , inset = .01, cex = 0.8)
+```
+
+There are a few lines that are not parallel, so we have reason to believe there may be an interaction effect based on the plot.
+
+Here is the interaction plot of the pneumonia data.
+
+```{r}
+Pneumean = apply(Pneuyij.bar, 1, mean)
+plot(Pneuyij.bar[,1],xaxt = 'n',main = 'Interaction plot', pch=19, type="l", ylim=c(min(Pneuyij.bar),max(Pneuyij.bar)), xlim = c(1, 2.75), xlab="Factor A: Sex", ylab = "Pneumonia Proportion")
+axis(side = 1,at = c(1, 2),labels = c('Male','Female'))
+points(Pneuyij.bar[,2], type="l", col="blue")
+points(Pneuyij.bar[,3], type="l", col="red")
+points(Pneuyij.bar[,4], type="l", col="green")
+points(Pneuyij.bar[,5], type="l", col="pink")
+points(Pneuyij.bar[,6], type="l", col="purple")
+points(Pneuyij.bar[,7], type="l", col="orange")
+points(Pneumean, type="l", col="cyan")
+legend("bottomright", legend=c("Factor B: 0-17 years", "Factor B: 18-29 years", "Factor B: 30-49 years", 
+                               "Factor B: 50-64 years", "Factor B: 65-74 years", "Factor B: 75-84 years",
+                               "Factor B: 85 years and over", "Factor B: Meanline"), col=c("black","blue", "red", "green", "pink", "purple", "orange", "cyan"), lty=1 , inset = .01, cex = 0.8)
+```
+
+There does seem to be an interaction effect, as not all the lines appear to be parallel (with some intersections).
+
+Here is the interaction plot for influenza:
+
+```{r}
+Flumean = apply(Fluyij.bar, 1, mean)
+plot(Fluyij.bar[,1],xaxt = 'n',main = 'Interaction plot', pch=19, type="l", ylim=c(min(Fluyij.bar),max(Fluyij.bar)), xlim = c(1, 2.75), xlab="Factor A: Sex", ylab = "Influenza Proportion")
+axis(side = 1,at = c(1, 2),labels = c('Male','Female'))
+points(Fluyij.bar[,2], type="l", col="blue")
+points(Fluyij.bar[,3], type="l", col="red")
+points(Fluyij.bar[,4], type="l", col="green")
+points(Fluyij.bar[,5], type="l", col="pink")
+points(Fluyij.bar[,6], type="l", col="purple")
+points(Fluyij.bar[,7], type="l", col="orange")
+points(Flumean, type="l", col="cyan")
+legend("bottomright", legend=c("Factor B: 0-17 years", "Factor B: 18-29 years", "Factor B: 30-49 years", 
+                               "Factor B: 50-64 years", "Factor B: 65-74 years", "Factor B: 75-84 years",
+                               "Factor B: 85 years and over", "Factor B: Meanline"), col=c("black","blue", "red", "green", "pink", "purple", "orange", "cyan"), lty=1 , inset = .01, cex = 0.8)
+```
+
+Visually there does seem to be an interaction, as not all the lines are parallel.
+
+# ANOVA Tables
+
+We will now compute the values of the ANOVA table for each of COVID-19, pneumonia, and influenza.
+
+```{r}
+
+## ANOVA table
+
+# Degrees of Freedom
+
+df_a = a-1
+df_b = b-1
+df_ab = (a-1)*(b-1)
+df_e = a*b*(n-1)
+df_total = (n*a*b)-1
+
+
+
+#SSA
+COVIDmA = rep(0, 2)
+COVIDmA[1] = mean(COVIDyij.bar[1,])
+COVIDmA[2] = mean(COVIDyij.bar[2,])
+
+COVIDSSA = n*b*sum((COVIDmA - mu_covid)^2)
+COVIDMSA = COVIDSSA/df_a
+
+PneumA = rep(0, 2)
+PneumA[1] = mean(Pneuyij.bar[1,])
+PneumA[2] = mean(Pneuyij.bar[2,])
+
+PneuSSA = n*b*sum((PneumA - mu_pneumonia)^2)
+PneuMSA = PneuSSA/df_a
+
+FlumA = rep(0, 2)
+FlumA[1] = mean(Fluyij.bar[1,])
+FlumA[2] = mean(Fluyij.bar[2,])
+
+FluSSA = n*b*sum((FlumA - mu_influenza)^2)
+FluMSA = FluSSA/df_a
+
+
+
+##SSB
+COVIDmB = rep(0, 7)
+COVIDmB[1] = mean(COVIDyij.bar[, 1])
+COVIDmB[2] = mean(COVIDyij.bar[, 2])
+COVIDmB[3] = mean(COVIDyij.bar[, 3])
+COVIDmB[4] = mean(COVIDyij.bar[, 4])
+COVIDmB[5] = mean(COVIDyij.bar[, 5])
+COVIDmB[6] = mean(COVIDyij.bar[, 6])
+COVIDmB[7] = mean(COVIDyij.bar[, 7])
+COVIDSSB = n*a*sum((COVIDmB - mu_covid)^2)
+COVIDMSB = COVIDSSB/df_b
+
+
+PneumB = rep(0, 7)
+PneumB[1] = mean(Pneuyij.bar[, 1])
+PneumB[2] = mean(Pneuyij.bar[, 2])
+PneumB[3] = mean(Pneuyij.bar[, 3])
+PneumB[4] = mean(Pneuyij.bar[, 4])
+PneumB[5] = mean(Pneuyij.bar[, 5])
+PneumB[6] = mean(Pneuyij.bar[, 6])
+PneumB[7] = mean(Pneuyij.bar[, 7])
+PneuSSB = n*a*sum((PneumB - mu_pneumonia)^2)
+PneuMSB = PneuSSB/df_b
+
+
+FlumB = rep(0, 7)
+FlumB[1] = mean(Fluyij.bar[, 1])
+FlumB[2] = mean(Fluyij.bar[, 2])
+FlumB[3] = mean(Fluyij.bar[, 3])
+FlumB[4] = mean(Fluyij.bar[, 4])
+FlumB[5] = mean(Fluyij.bar[, 5])
+FlumB[6] = mean(Fluyij.bar[, 6])
+FlumB[7] = mean(Fluyij.bar[, 7])
+FluSSB = n*a*sum((FlumB - mu_influenza)^2)
+FluMSB = FluSSB/df_b
+
+
+
+##SSAB
+COVIDABmat = matrix(0, a, b)
+for (i in 1:a){
+  for (j in 1:b){
+    COVIDABmat[i, j] = (COVIDyij.bar[i,j] - COVIDmA[i] - COVIDmB[j] + mu_covid)^2 
+  }
+}
+
+COVIDSSAB = n*sum(COVIDABmat)
+COVIDMSAB = COVIDSSAB/df_ab
+
+
+
+PneuABmat = matrix(0, a, b)
+for (i in 1:a){
+  for (j in 1:b){
+    PneuABmat[i, j] = (Pneuyij.bar[i,j] - PneumA[i] - PneumB[j] + mu_pneumonia)^2 
+  }
+}
+
+PneuSSAB = n*sum(PneuABmat)
+PneuMSAB = PneuSSAB/df_ab
+
+
+
+FluABmat = matrix(0, a, b)
+for (i in 1:a){
+  for (j in 1:b){
+    FluABmat[i, j] = (Fluyij.bar[i,j] - FlumA[i] - FlumB[j] + mu_influenza)^2 
+  }
+}
+
+FluSSAB = n*sum(FluABmat)
+FluMSAB = FluSSAB/df_ab
+
+
+
+##SSE
+COVIDError = matrix(0, a, b)
+for(i in 1:a){
+  for(j in 1:b){
+    COVIDError[i, j] = sum((covid[sex == SexLabels[i] & age == AgeLabels[j]] - COVIDyij.bar[i, j])^2)
+  }
+}
+
+COVIDSSE = sum(COVIDError)
+COVIDMSE = COVIDSSE/df_e
+
+
+PneuError = matrix(0, a, b)
+for(i in 1:a){
+  for(j in 1:b){
+    PneuError[i, j] = sum((pneumonia[sex == SexLabels[i] & age == AgeLabels[j]] - Pneuyij.bar[i, j])^2)
+  }
+}
+
+PneuSSE = sum(PneuError)
+PneuMSE = PneuSSE/df_e
+
+
+
+FluError = matrix(0, a, b)
+for(i in 1:a){
+  for(j in 1:b){
+    FluError[i, j] = sum((flu[sex == SexLabels[i] & age == AgeLabels[j]] - Fluyij.bar[i, j])^2)
+  }
+}
+
+FluSSE = sum(FluError)
+FluMSE = FluSSE/df_e
+
+
+##Totals
+
+COVIDSSTO = COVIDSSA + COVIDSSB + COVIDSSAB + COVIDSSE
+PneuSSTO = PneuSSA + PneuSSB + PneuSSAB + PneuSSE
+FluSSTO = FluSSA + FluSSB + FluSSAB + FluSSE
+
+COVIDMSTO = COVIDMSA + COVIDMSB + COVIDMSAB + COVIDMSE
+PneuMSTO = PneuMSA + PneuMSB + PneuMSAB + PneuMSE
+FluMSTO = FluMSA + FluMSB + FluMSAB + FluMSE
+```
+
+We present the ANOVA tables one by one, first with COVID-19 data and then the pneumonia and flu to compare.
+
+Here is the COVID-19 ANOVA table:
+
+```{r}
+require(pander)
+mydat = data.frame(
+  'Source of Variation' = c('Factor A', 'Factor B', 'AB Interaction', 'Error', 'Total'),
+  'Sum of Squares' = c(COVIDSSA, COVIDSSB, COVIDSSAB, COVIDSSE, COVIDSSTO), 
+  'Degrees of Freedom' = c(df_a, df_b, df_ab, df_e, df_total), 
+  'Mean of Squares' = c(COVIDMSA, COVIDMSB, COVIDMSAB, COVIDMSE, COVIDMSTO))
+colnames(mydat) = c('Source of Variation', 'Least Squares Estimates', 'Degrees of Freedom', 'Mean of Squares')
+panderOptions('table.split.table', Inf)
+pander(pandoc.table(mydat),style = 'rmarkdown')
+```
+
+Here is the pneumonia ANOVA table:
+
+```{r}
+mydat = data.frame(
+  'Source of Variation' = c('Factor A', 'Factor B', 'AB Interaction', 'Error', 'Total'),
+  'Sum of Squares' = c(PneuSSA, PneuSSB, PneuSSAB, PneuSSE, PneuSSTO), 
+  'Degrees of Freedom' = c(df_a, df_b, df_ab, df_e, df_total), 
+  'Mean of Squares' = c(PneuMSA, PneuMSB, PneuMSAB, PneuMSE, PneuMSTO))
+colnames(mydat) = c('Source of Variation', 'Least Squares Estimates', 'Degrees of Freedom', 'Mean of Squares')
+panderOptions('table.split.table', Inf)
+pander(pandoc.table(mydat),style = 'rmarkdown')
+```
+
+Here is the influenza table:
+
+```{r}
+mydat = data.frame(
+  'Source of Variation' = c('Factor A', 'Factor B', 'AB Interaction', 'Error', 'Total'),
+  'Sum of Squares' = c(FluSSA, FluSSB, FluSSAB, FluSSE, FluSSTO), 
+  'Degrees of Freedom' = c(df_a, df_b, df_ab, df_e, df_total), 
+  'Mean of Squares' = c(FluMSA, FluMSB, FluMSAB, FluMSE, FluMSTO))
+colnames(mydat) = c('Source of Variation', 'Least Squares Estimates', 'Degrees of Freedom', 'Mean of Squares')
+panderOptions('table.split.table', Inf)
+pander(pandoc.table(mydat),style = 'rmarkdown')
+```
+
+# Tests for Interaction, Factor A, and Factor B effects
+
+We now test for interaction of sex and age on each of the death rates for COVID-19, pneumonia, and influenza respectively with $\alpha = 0.05$. The following decision rules and hypotheses apply to all of COVID-19 data, pneumonia data, and influenza data.
+
+##
+
+Test for Interaction effects:
+
+$H_0:$ There is no interaction effect between the factors.
+
+$H_A:$ There is an interaction effect between the factors.
+
+Test statistic: $F^* = \frac{MSAB}{MSE} = \frac{(\frac{SSAB}{(a-1)(b-1)})}{(\frac{SSE}{(nab-ab)})}$
+
+Decision rule: Reject the no-interaction effect null hypothesis if $F^* > F(0.95, 6, 714)$.
+
+
+
+Test for Factor A effects:
+
+$H_0:$ There is no Factor A effect.
+
+$H_A:$ There is a Factor A effect.
+
+Test Statistic: $F^* = \frac{MSA}{MSE} = \frac{(\frac{SSA}{a-1})}{(\frac{SSE}{nab-ab})}$
+
+Decision rule: Reject the no-Factor A effect null hypothesis if $F^* > F(0.95, 1, 714)$
+
+
+
+Test for Factor B effects:
+
+$H_0:$ There is no Factor B effect.
+
+$H_A:$ There is a Factor B effect.
+
+Test Statistic: $F^* = \frac{MSB}{MSE} = \frac{(\frac{SSB}{b-1})}{(\frac{SSE}{nab-ab})}$
+
+Decision rule: Reject the no-Factor B effect null hypothesis if $F^* > F(0.95, 6, 714)$
+
+##
+
+Here we test for interaction, Factor A effect, and Factor B effect in COVID data.
+
+```{r}
+## Hypothesis Testing - COVID-19 Data
+
+## Interaction Effect
+
+COVID_TestStat_int = COVIDMSAB/COVIDMSE
+CritVal_int = qf(0.95, (a-1)*(b-1), a*b*(n-1)) 
+```
+
+```{r}
+# Factor A
+COVID_TestStat_A = COVIDMSA/COVIDMSE
+CritVal_A = qf(0.95, a-1, a*b*(n-1))
+
+# Factor B 
+
+COVID_TestStat_B = COVIDMSB/COVIDMSE
+CritVal_B = qf(0.95, b-1, a*b*(n-1))
+
+mydat = data.frame('test stat' = c(COVID_TestStat_A, COVID_TestStat_B, COVID_TestStat_int),
+                   'crit val' = c(CritVal_A, CritVal_B, CritVal_int))
+colnames(mydat) = c('Test Statistic', 'Critical Value')
+rownames(mydat) = c('Factor A', 'Factor B', 'Interaction')
+panderOptions('table.split.table', Inf)
+pander(pandoc.table(mydat),style = 'rmarkdown')
+```
+
+From these tests, we can conclude that:
+
+* With a test statistic of `r COVID_TestStat_A` and a critical value of `r CritVal_A`, we have sufficient evidence to prove that there is a Factor A effect of sex on COVID-19 death rates.
+
+* With a test statistic of `r COVID_TestStat_B` and a critical value of `r CritVal_B`, we have sufficient evidence to prove that there is a Factor B effect of age on COVID-19 death rates.
+
+* With a test statistic of `r COVID_TestStat_int` and a critical value of `r CritVal_int`, we have sufficient evidence to prove that there is an interaction effect between sex and age on COVID-19 death rates.
+
+Here we test for interaction effect, Factor A effect, and Factor B effect in pneumonia data.
+
+```{r}
+# PNEUMONIA
+
+## Interaction Effect
+
+Pneu_TestStat_int = PneuMSAB/PneuMSE
+
+Pneu_TestStat_A = PneuMSA/PneuMSE
+
+## Factor B 
+
+Pneu_TestStat_B = PneuMSB/PneuMSE
+
+mydat = data.frame('test stat' = c(Pneu_TestStat_A, Pneu_TestStat_B, Pneu_TestStat_int),
+                   'crit val' = c(CritVal_A, CritVal_B, CritVal_int))
+colnames(mydat) = c('Test Statistic', 'Critical Value')
+rownames(mydat) = c('Factor A', 'Factor B', 'Interaction')
+panderOptions('table.split.table', Inf)
+pander(pandoc.table(mydat),style = 'rmarkdown')
+```
+
+From these tests, we can conclude that:
+
+* With a test statistic of `r Pneu_TestStat_A` and a critical value of `r CritVal_A`, we have sufficient evidence to prove that there is a Factor A effect of sex on pneumonia death rates.
+
+* With a test statistic of `r Pneu_TestStat_B` and a critical value of `r CritVal_B`, we have sufficient evidence to prove that there is a Factor B effect of age on pneumonia death rates.
+
+* With a test statistic of `r Pneu_TestStat_int` and a critical value of `r CritVal_int`, we have sufficient evidence to prove that there is an interaction effect between sex and age on pneumonia death rates.
+
+Here we test for interaction effect, Factor A effect, and Factor B effect in influenza data.
+
+```{r}
+## Interaction Effect
+
+Flu_TestStat_int = FluMSAB/FluMSE
+
+# FLU
+Flu_TestStat_A = FluMSA/FluMSE
+
+# Factor B 
+
+Flu_TestStat_B = FluMSB/FluMSE
+
+
+mydat = data.frame('test stat' = c(Flu_TestStat_A, Flu_TestStat_B, Flu_TestStat_int),
+                   'crit val' = c(CritVal_A, CritVal_B, CritVal_int))
+colnames(mydat) = c('Test Statistic', 'Critical Value')
+rownames(mydat) = c('Factor A', 'Factor B', 'Interaction')
+panderOptions('table.split.table', Inf)
+pander(pandoc.table(mydat),style = 'rmarkdown')
+```
+
+From these tests, we can conclude that:
+
+* With a test statistic of `r Flu_TestStat_A` and a critical value of `r CritVal_A`, we have sufficient evidence to prove that there is a Factor A effect of sex on influenza death rates.
+
+* With a test statistic of `r Flu_TestStat_B` and a critical value of `r CritVal_B`, we have sufficient evidence to prove that there is a Factor B effect of age on influenza death rates.
+
+* With a test statistic of `r Flu_TestStat_int` and a critical value of `r CritVal_int`, we have sufficient evidence to prove that there is an interaction effect between sex and age on influenza death rates.
+
+# Comparison of COVID-19, Pneumonia, and Influenza Death Rates by Sex and Age Group
+
+We will conduct 95% confidence intervals for the COVID-19, pneumonia, and influenza. For these intervals we use an alpha level of 0.05 ($\alpha = 0.05$).
+
+```{r}
+
+# Assign point estimators
+
+# Male, COVID-19
+
+u_M_0_17_COVID = COVIDyij.bar[1,1]
+u_M_18_29_COVID = COVIDyij.bar[1,2]
+u_M_30_49_COVID = COVIDyij.bar[1,3]
+u_M_50_64_COVID = COVIDyij.bar[1,4]
+u_M_65_74_COVID = COVIDyij.bar[1,5]
+u_M_75_84_COVID = COVIDyij.bar[1,6]
+u_M_85_plus_COVID = COVIDyij.bar[1,7]
+
+# Female, COVID-19
+
+u_F_0_17_COVID = COVIDyij.bar[2,1]
+u_F_18_29_COVID = COVIDyij.bar[2,2]
+u_F_30_49_COVID = COVIDyij.bar[2,3]
+u_F_50_64_COVID = COVIDyij.bar[2,4]
+u_F_65_74_COVID = COVIDyij.bar[2,5]
+u_F_75_84_COVID = COVIDyij.bar[2,6]
+u_F_85_plus_COVID = COVIDyij.bar[2,7]
+
+# Male, pneumonia
+
+u_M_0_17_pneumonia = Pneuyij.bar[1,1]
+u_M_18_29_pneumonia = Pneuyij.bar[1,2]
+u_M_30_49_pneumonia = Pneuyij.bar[1,3]
+u_M_50_64_pneumonia = Pneuyij.bar[1,4]
+u_M_65_74_pneumonia = Pneuyij.bar[1,5]
+u_M_75_84_pneumonia = Pneuyij.bar[1,6]
+u_M_85_plus_pneumonia = Pneuyij.bar[1,7]
+
+# Female, pneumonia
+
+u_F_0_17_pneumonia = Pneuyij.bar[2,1]
+u_F_18_29_pneumonia = Pneuyij.bar[2,2]
+u_F_30_49_pneumonia = Pneuyij.bar[2,3]
+u_F_50_64_pneumonia = Pneuyij.bar[2,4]
+u_F_65_74_pneumonia = Pneuyij.bar[2,5]
+u_F_75_84_pneumonia = Pneuyij.bar[2,6]
+u_F_85_plus_pneumonia = Pneuyij.bar[2,7]
+
+# Male, influenza
+
+u_M_0_17_influenza = Fluyij.bar[1,1]
+u_M_18_29_influenza = Fluyij.bar[1,2]
+u_M_30_49_influenza = Fluyij.bar[1,3]
+u_M_50_64_influenza = Fluyij.bar[1,4]
+u_M_65_74_influenza = Fluyij.bar[1,5]
+u_M_75_84_influenza = Fluyij.bar[1,6]
+u_M_85_plus_influenza = Fluyij.bar[1,7]
+
+# Female, influenza
+
+u_F_0_17_influenza = Fluyij.bar[2,1]
+u_F_18_29_influenza = Fluyij.bar[2,2]
+u_F_30_49_influenza = Fluyij.bar[2,3]
+u_F_50_64_influenza = Fluyij.bar[2,4]
+u_F_65_74_influenza = Fluyij.bar[2,5]
+u_F_75_84_influenza = Fluyij.bar[2,6]
+u_F_85_plus_influenza = Fluyij.bar[2,7]
+
+
+
+# Standard Errors
+
+se_covid = sqrt(COVIDMSE/n)
+se_pneumonia = sqrt(PneuMSE/n)
+se_influenza = sqrt(FluMSE/n)
+
+
+
+# Multiplier
+
+multiplier = qt(1-(0.05/2),df=a*b*(n-1))
+```
+
+Here is the table of confidence intervals for the death rates of males for various age groups due to COVID-19.
+
+```{r}
+
+# Confidence Intervals
+
+# Male, COVID-19
+
+CI_M_0_17_COVID = c(u_M_0_17_COVID - multiplier * se_covid, u_M_0_17_COVID + multiplier * se_covid)
+CI_M_18_29_COVID = c(u_M_18_29_COVID - multiplier * se_covid, u_M_18_29_COVID + multiplier * se_covid)
+CI_M_30_49_COVID = c(u_M_30_49_COVID - multiplier * se_covid, u_M_30_49_COVID + multiplier * se_covid)
+CI_M_50_64_COVID = c(u_M_50_64_COVID - multiplier * se_covid, u_M_50_64_COVID + multiplier * se_covid)
+CI_M_65_74_COVID = c(u_M_65_74_COVID - multiplier * se_covid, u_M_65_74_COVID + multiplier * se_covid)
+CI_M_75_84_COVID = c(u_M_75_84_COVID - multiplier * se_covid, u_M_75_84_COVID + multiplier * se_covid)
+CI_M_85_plus_COVID = c(u_M_85_plus_COVID - multiplier * se_covid, u_M_85_plus_COVID + multiplier * se_covid)
+
+mydat = data.frame(
+  'Lower Bound' = c(CI_M_0_17_COVID[1], CI_M_18_29_COVID[1], CI_M_30_49_COVID[1], CI_M_50_64_COVID[1], CI_M_65_74_COVID[1], CI_M_75_84_COVID[1], CI_M_85_plus_COVID[1]),
+  'Upper Bound' = c(CI_M_0_17_COVID[2], CI_M_18_29_COVID[2], CI_M_30_49_COVID[2], CI_M_50_64_COVID[2], CI_M_65_74_COVID[2], CI_M_75_84_COVID[2], CI_M_85_plus_COVID[2]))
+colnames(mydat) = c('Lower Bound', 'Upper Bound')
+rownames(mydat) = c('Ages 0-17', 'Ages 18-29', 'Ages 30-49', 'Ages 50-64', 'Ages 65-74', 'Ages 75-84', 'Ages 85+')
+panderOptions('table.split.table', Inf)
+pander(pandoc.table(mydat),style = 'rmarkdown')
+```
+
+Here is the table of confidence intervals for the death rates of females for various age groups due to COVID-19.
+
+```{r}
+
+# Female, COVID-19
+
+CI_F_0_17_COVID = c(u_F_0_17_COVID - multiplier * se_covid, u_F_0_17_COVID + multiplier * se_covid)
+CI_F_18_29_COVID = c(u_F_18_29_COVID - multiplier * se_covid, u_F_18_29_COVID + multiplier * se_covid)
+CI_F_30_49_COVID = c(u_F_30_49_COVID - multiplier * se_covid, u_F_30_49_COVID + multiplier * se_covid)
+CI_F_50_64_COVID = c(u_F_50_64_COVID - multiplier * se_covid, u_F_50_64_COVID + multiplier * se_covid)
+CI_F_65_74_COVID = c(u_F_65_74_COVID - multiplier * se_covid, u_F_65_74_COVID + multiplier * se_covid)
+CI_F_75_84_COVID = c(u_F_75_84_COVID - multiplier * se_covid, u_F_75_84_COVID + multiplier * se_covid)
+CI_F_85_plus_COVID = c(u_F_85_plus_COVID - multiplier * se_covid, u_F_85_plus_COVID + multiplier * se_covid)
+
+mydat = data.frame(
+  'Lower Bound' = c(CI_F_0_17_COVID[1], CI_F_18_29_COVID[1], CI_F_30_49_COVID[1], CI_F_50_64_COVID[1], CI_F_65_74_COVID[1], CI_F_75_84_COVID[1], CI_F_85_plus_COVID[1]),
+  'Upper Bound' = c(CI_F_0_17_COVID[2], CI_F_18_29_COVID[2], CI_F_30_49_COVID[2], CI_F_50_64_COVID[2], CI_F_65_74_COVID[2], CI_F_75_84_COVID[2], CI_F_85_plus_COVID[2]))
+colnames(mydat) = c('Lower Bound', 'Upper Bound')
+rownames(mydat) = c('Ages 0-17', 'Ages 18-29', 'Ages 30-49', 'Ages 50-64', 'Ages 65-74', 'Ages 75-84', 'Ages 85+')
+panderOptions('table.split.table', Inf)
+pander(pandoc.table(mydat),style = 'rmarkdown')
+```
+
+*Note*: For the practical implications of the intervals for males ages 0-17 and females ages 0-17, it is impossible to have a negative death rate so the natural lower bound is 0% death rate.
+
+### Analysis of Age and Sex Differences on COVID-19 Death Rate
+
+We have evidence that suggests:
+
+* The bounds of the confidence intervals generally seem to be increasing as people get older across both males and females. Our analysis shows us that older people die from COVID-19 at a higher proportion than younger people. However, this does not mean that the true death rate for each age group is necessarily greater than the previous age group's death rate, as consecutive age group confidence intervals have overlap, meaning that the true death rate for one age-sex combination due to COVID-19 could be less than, greater than, or equal to the true death rate for another age-sex combination due to COVID-19.
+
+* The increasing change in death rate as individuals get older stabilizes when individuals are 65 or older. The average death rates of the last three age groups have minimal differences between them, as all three confidence intervals overlap for a large section of each interval.
+
+* Across a majority of these COVID-19 intervals, males die from COVID-19 at a very slightly higher proportion than females die from COVID-19. However, this slight difference alone is noted but not enough evidence on its own to signify a significant Factor A effect (sex) on COVID-19 death rates.
+
+* For both males and females, the biggest increase in death rates is between the age groups of Ages 18-29 and Ages 30-49.
+
+Here is the table of confidence intervals for the death rates of males for various age groups due to pneumonia.
+
+```{r}
+
+# Male, pneumonia
+
+CI_M_0_17_pneumonia = c(u_M_0_17_pneumonia - multiplier * se_pneumonia, u_M_0_17_pneumonia + multiplier * se_pneumonia)
+CI_M_18_29_pneumonia = c(u_M_18_29_pneumonia - multiplier * se_pneumonia, u_M_18_29_pneumonia + multiplier * se_pneumonia)
+CI_M_30_49_pneumonia = c(u_M_30_49_pneumonia - multiplier * se_pneumonia, u_M_30_49_pneumonia + multiplier * se_pneumonia)
+CI_M_50_64_pneumonia = c(u_M_50_64_pneumonia - multiplier * se_pneumonia, u_M_50_64_pneumonia + multiplier * se_pneumonia)
+CI_M_65_74_pneumonia = c(u_M_65_74_pneumonia - multiplier * se_pneumonia, u_M_65_74_pneumonia + multiplier * se_pneumonia)
+CI_M_75_84_pneumonia = c(u_M_75_84_pneumonia - multiplier * se_pneumonia, u_M_75_84_pneumonia + multiplier * se_pneumonia)
+CI_M_85_plus_pneumonia = c(u_M_85_plus_pneumonia - multiplier * se_pneumonia, u_M_85_plus_pneumonia + multiplier * se_pneumonia)
+
+mydat = data.frame(
+  'Lower Bound' = c(CI_M_0_17_pneumonia[1], CI_M_18_29_pneumonia[1], CI_M_30_49_pneumonia[1], CI_M_50_64_pneumonia[1], CI_M_65_74_pneumonia[1], CI_M_75_84_pneumonia[1], CI_M_85_plus_pneumonia[1]),
+  'Upper Bound' = c(CI_M_0_17_pneumonia[2], CI_M_18_29_pneumonia[2], CI_M_30_49_pneumonia[2], CI_M_50_64_pneumonia[2], CI_M_65_74_pneumonia[2], CI_M_75_84_pneumonia[2], CI_M_85_plus_pneumonia[2]))
+colnames(mydat) = c('Lower Bound', 'Upper Bound')
+rownames(mydat) = c('Ages 0-17', 'Ages 18-29', 'Ages 30-49', 'Ages 50-64', 'Ages 65-74', 'Ages 75-84', 'Ages 85+')
+panderOptions('table.split.table', Inf)
+pander(pandoc.table(mydat),style = 'rmarkdown')
+```
+
+Here is the table of confidence intervals for the death rates of females for various age groups due to pneumonia.
+
+```{r}
+
+# Female, pneumonia
+
+CI_F_0_17_pneumonia = c(u_F_0_17_pneumonia - multiplier * se_pneumonia, u_F_0_17_pneumonia + multiplier * se_pneumonia)
+CI_F_18_29_pneumonia = c(u_F_18_29_pneumonia - multiplier * se_pneumonia, u_F_18_29_pneumonia + multiplier * se_pneumonia)
+CI_F_30_49_pneumonia = c(u_F_30_49_pneumonia - multiplier * se_pneumonia, u_F_30_49_pneumonia + multiplier * se_pneumonia)
+CI_F_50_64_pneumonia = c(u_F_50_64_pneumonia - multiplier * se_pneumonia, u_F_50_64_pneumonia + multiplier * se_pneumonia)
+CI_F_65_74_pneumonia = c(u_F_65_74_pneumonia - multiplier * se_pneumonia, u_F_65_74_pneumonia + multiplier * se_pneumonia)
+CI_F_75_84_pneumonia = c(u_F_75_84_pneumonia - multiplier * se_pneumonia, u_F_75_84_pneumonia + multiplier * se_pneumonia)
+CI_F_85_plus_pneumonia = c(u_F_85_plus_pneumonia - multiplier * se_pneumonia, u_F_85_plus_pneumonia + multiplier * se_pneumonia)
+
+mydat = data.frame(
+  'Lower Bound' = c(CI_F_0_17_pneumonia[1], CI_F_18_29_pneumonia[1], CI_F_30_49_pneumonia[1], CI_F_50_64_pneumonia[1], CI_F_65_74_pneumonia[1], CI_F_75_84_pneumonia[1], CI_F_85_plus_pneumonia[1]),
+  'Upper Bound' = c(CI_F_0_17_pneumonia[2], CI_F_18_29_pneumonia[2], CI_F_30_49_pneumonia[2], CI_F_50_64_pneumonia[2], CI_F_65_74_pneumonia[2], CI_F_75_84_pneumonia[2], CI_F_85_plus_pneumonia[2]))
+colnames(mydat) = c('Lower Bound', 'Upper Bound')
+rownames(mydat) = c('Ages 0-17', 'Ages 18-29', 'Ages 30-49', 'Ages 50-64', 'Ages 65-74', 'Ages 75-84', 'Ages 85+')
+panderOptions('table.split.table', Inf)
+pander(pandoc.table(mydat),style = 'rmarkdown')
+```
+
+*Note*: For the practical implications of the intervals for males ages 0-17 and females ages 0-17, it is impossible to have a negative death rate so the natural lower bound is 0% death rate.
+
+### Analysis of Age and Sex Differences on Pneumonia Death Rate
+
+We have evidence that suggests:
+
+* The upper bound of the confidence intervals generally seem to be increasing as people get older across both males and females. Our analysis shows us that older people die from pneumonia at a higher proportion than younger people. However, this does not mean that the true death rate for each age group is necessarily greater than the previous age group's death rate, as consecutive age group confidence intervals have overlap, meaning that the true death rate for one age-sex combination due to pneumonia could be less than, greater than, or equal to the true death rate for another age-sex combination due to pneumonia.
+
+* Across a majority of these pneumonia intervals, males die from pneumonia at a very slightly higher proportion than females die from pneumonia. However, this slight difference alone is noted but not enough evidence on its own to signify a significant Factor A effect (sex) on pneumonia death rates.
+
+* For both males and females, the biggest increase in death rates is between the age groups of Ages 18-29 and Ages 30-49.
+
+### Comparison to COVID-19 Death Rate
+
+We have evidence that suggests:
+
+* For both COVID-19 and pneumonia, older people die from both diseases at a higher rate than they do for younger people.
+
+* For both COVID-19 and pneumonia, males die from both diseases at a higher rate than females die.
+
+* For both COVID-19 and pneumonia, there is an interaction effect between age and sex on death rates from these diseases.
+
+Here is the table of confidence intervals for the death rates of males for various age groups due to influenza.
+
+```{r}
+
+# Male, influenza
+
+CI_M_0_17_influenza = c(u_M_0_17_influenza - multiplier * se_influenza, u_M_0_17_influenza + multiplier * se_influenza)
+CI_M_18_29_influenza = c(u_M_18_29_influenza - multiplier * se_influenza, u_M_18_29_influenza + multiplier * se_influenza)
+CI_M_30_49_influenza = c(u_M_30_49_influenza - multiplier * se_influenza, u_M_30_49_influenza + multiplier * se_influenza)
+CI_M_50_64_influenza = c(u_M_50_64_influenza - multiplier * se_influenza, u_M_50_64_influenza + multiplier * se_influenza)
+CI_M_65_74_influenza = c(u_M_65_74_influenza - multiplier * se_influenza, u_M_65_74_influenza + multiplier * se_influenza)
+CI_M_75_84_influenza = c(u_M_75_84_influenza - multiplier * se_influenza, u_M_75_84_influenza + multiplier * se_influenza)
+CI_M_85_plus_influenza = c(u_M_85_plus_influenza - multiplier * se_influenza, u_M_85_plus_influenza + multiplier * se_influenza)
+
+mydat = data.frame(
+  'Lower Bound' = c(CI_M_0_17_influenza[1], CI_M_18_29_influenza[1], CI_M_30_49_influenza[1], CI_M_50_64_influenza[1], CI_M_65_74_influenza[1], CI_M_75_84_influenza[1], CI_M_85_plus_influenza[1]),
+  'Upper Bound' = c(CI_M_0_17_influenza[2], CI_M_18_29_influenza[2], CI_M_30_49_influenza[2], CI_M_50_64_influenza[2], CI_M_65_74_influenza[2], CI_M_75_84_influenza[2], CI_M_85_plus_influenza[2]))
+colnames(mydat) = c('Lower Bound', 'Upper Bound')
+rownames(mydat) = c('Ages 0-17', 'Ages 18-29', 'Ages 30-49', 'Ages 50-64', 'Ages 65-74', 'Ages 75-84', 'Ages 85+')
+panderOptions('table.split.table', Inf)
+pander(pandoc.table(mydat),style = 'rmarkdown')
+```
+
+Here is the table of confidence intervals for the death rates of females for various age groups due to influenza.
+
+```{r}
+# Female influenza
+
+CI_F_0_17_influenza = c(u_F_0_17_influenza - multiplier * se_influenza, u_F_0_17_influenza + multiplier * se_influenza)
+CI_F_18_29_influenza = c(u_F_18_29_influenza - multiplier * se_influenza, u_F_18_29_influenza + multiplier * se_influenza)
+CI_F_30_49_influenza = c(u_F_30_49_influenza - multiplier * se_influenza, u_F_30_49_influenza + multiplier * se_influenza)
+CI_F_50_64_influenza = c(u_F_50_64_influenza - multiplier * se_influenza, u_F_50_64_influenza + multiplier * se_influenza)
+CI_F_65_74_influenza = c(u_F_65_74_influenza - multiplier * se_influenza, u_F_65_74_influenza + multiplier * se_influenza)
+CI_F_75_84_influenza = c(u_F_75_84_influenza - multiplier * se_influenza, u_F_75_84_influenza + multiplier * se_influenza)
+CI_F_85_plus_influenza = c(u_F_85_plus_influenza - multiplier * se_influenza, u_F_85_plus_influenza + multiplier * se_influenza)
+
+mydat = data.frame(
+  'Lower Bound' = c(CI_F_0_17_influenza[1], CI_F_18_29_influenza[1], CI_F_30_49_influenza[1], CI_F_50_64_influenza[1], CI_F_65_74_influenza[1], CI_F_75_84_influenza[1], CI_F_85_plus_influenza[1]),
+  'Upper Bound' = c(CI_F_0_17_influenza[2], CI_F_18_29_influenza[2], CI_F_30_49_influenza[2], CI_F_50_64_influenza[2], CI_F_65_74_influenza[2], CI_F_75_84_influenza[2], CI_F_85_plus_influenza[2]))
+colnames(mydat) = c('Lower Bound', 'Upper Bound')
+rownames(mydat) = c('Ages 0-17', 'Ages 18-29', 'Ages 30-49', 'Ages 50-64', 'Ages 65-74', 'Ages 75-84', 'Ages 85+')
+panderOptions('table.split.table', Inf)
+pander(pandoc.table(mydat),style = 'rmarkdown')
+```
+
+*Note*: For the practical implications of the intervals for males ages 0-17, females ages 0-17, males ages 18-29, and females ages 18-29, it is impossible to have a negative death rate so the natural lower bound is 0% death rate.
+
+### Analysis of Age and Sex Differences on Influenza Death Rate and comparison to COVID-19 Death Rate
+
+We have evidence that suggests:
+
+* The upper bound of the confidence intervals generally seem to be increasing as people get older across both males and females. Our analysis shows us that older people die from influenza at a higher proportion than younger people. However, this does not mean that the true death rate for each age group is necessarily greater than the previous age group's death rate, as consecutive age group confidence intervals have overlap, meaning that the true death rate for one age-sex combination due to pneumonia could be less than, greater than, or equal to the true death rate for another age-sex combination due to influenza.
+
+* Across a majority of these influenza intervals, females die from influenza at a very slightly higher proportion than males die from influenza However, this slight difference alone is noted but not enough evidence on its own to signify a significant Factor A effect (sex) on pneumonia death rates.
+
+* For both males and females, the biggest increase in death rates is between the age groups of Ages 30-49 and Ages 50-64.
+
+### Comparison to COVID-19 Death Rate
+
+We have evidence that suggests:
+
+* Older people die from both COVID-19 and influenza at a higher rate than they do for younger people.
+
+* Males die from COVID-19 at a higher rate than females with COVID-19; in contrast, we have evidence that suggests that females die from influenza at a higher rate than males with influenza.
+
+* There is an interaction effect between age and sex on death rates for both COVID-19 and influenza.
+
+# Final Conclusions
+
+We have evidence that suggests that COVID-19 death rates are similar to pneumonia in scale, but are more threatening as a whole than compared to influenza (because we have higher proportions of people dying from COVID-19 than we do for influenza). COVID-19 death rates are similar to both pneumonia and influenza as for all three diseases, there is an effect of sex, an effect of age, and an interaction effect upon the death rates. Our evidence indicates that older people are more susceptible to dying from all three diseases relative to younger people. 
+
